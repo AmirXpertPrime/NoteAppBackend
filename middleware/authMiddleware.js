@@ -4,8 +4,10 @@ const User = require("../models/User");
 // Authentication Middleware
 const authenticate = async (req, res, next) => {
     try {
-        // Get token from header
-        const token = req.header("Authorization")?.replace("Bearer ", "");
+        // Prefer HttpOnly cookie token; fall back to Authorization header (Bearer <token>)
+        const cookieToken = req.cookies?.token;
+        const headerToken = req.header("Authorization")?.replace(/^Bearer\s+/i, "");
+        const token = cookieToken || headerToken;
 
         if (!token) {
             return res.status(401).json({ message: "No token, authorization denied" });

@@ -2,6 +2,21 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
+function getTokenCookieOptions() {
+    const isProd = process.env.NODE_ENV === "production";
+
+    // NOTE:
+    // - If your frontend and backend are on DIFFERENT sites in production, you likely need:
+    //   sameSite: "none" + secure: true
+    // - For local dev on localhost, "lax" is usually fine.
+    return {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
+        maxAge: 60 * 60 * 1000, // 1 hour (match JWT expiry below)
+    };
+}
+
 // Helper function to validate email
 function isValidEmail(email) {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -15,7 +30,7 @@ const signup = async (req, res) => {
     }
     const { fullName, email, password, confirmPassword } = req.body;
 
-    if (!isValidEmail(req.body.email)) {
+    if (!isValidEmail(email)) {
         return res.status(400).json({ error: "Invalid email format" });
     }
 
@@ -47,7 +62,7 @@ const signup = async (req, res) => {
 
         // Create JWT Token
         const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
-
+        res.cookie("token", token, getTokenCookieOptions());
         res.status(201).json({ token, user: { id: newUser._id, fullName, email } });
     } catch (err) {
         console.error(err);
@@ -73,6 +88,8 @@ const login = async (req, res) => {
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
+        // Send JWT in HttpOnly cookie
+        res.cookie("token", token, getTokenCookieOptions());
         res.json({ token, user: { id: user._id, fullName: user.fullName, email } });
     } catch (err) {
         console.error(err);
@@ -80,8 +97,19 @@ const login = async (req, res) => {
     }
 };
 
+const logout = async (req, res) => {
+    // Clear the auth cookie
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    });
+    return res.json({ message: "Logged out" });
+};
+
 module.exports = {
     signup,
-    login
+    login,
+    logout
 };
 
